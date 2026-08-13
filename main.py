@@ -101,11 +101,13 @@ def heartbeat(
 def hotspot_config(device_id: str):
 
     return {
-        "device_id": device_id,
-        "enabled": True,
-        "ssid": "MCOE-Hotspot",
-        "password": "MCOE12345678",
-        "max_clients": 10
+        "name": "MCOE",
+        "version": 1,
+        "hotspot": {
+            "ssid": "MCOE-Hotspot",
+            "password": "MCOE12345678",
+            "max_clients": 10
+        }
     }
 
 
