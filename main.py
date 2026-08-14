@@ -163,32 +163,14 @@ def heartbeat(
 # ==================================================
 
 @app.get("/api/esim/provision")
-def esim_provision(
-    device_id: str
-):
-
-    device = devices.get(device_id)
-
-    # ------------------------------------------------
-    # For now we allow provisioning even if the
-    # device has not registered yet.
-    #
-    # This can be changed later to require a token.
-    # ------------------------------------------------
+def esim_provision(device_id: str):
 
     return {
-
         "provider": "MCOE",
-
         "device_id": device_id,
-
         "type": "esim",
-
-        # IMPORTANT:
-        # Replace this with the REAL activation code
-        # supplied by your eSIM/SM-DP+ provider.
-        "activation_code":
-            "REPLACE_WITH_REAL_ACTIVATION_CODE"
+        "status": "pending",
+        "message": "eSIM provisioning request received"
     }
 
 
