@@ -123,12 +123,11 @@ def esim_provision(device_id: str):
 
     # Android/AOSP TS.48 test profile
     smdp_address = "prod.smdp-plus.rsp.goog"
+matching_id = "3TD6-8L82-HUE1-LVN6"
 
-    matching_id = "3TD6-8L82-HUE1-LVN6"
-
-    activation_code = (
-        f"1${smdp_address}${matching_id}"
-    )
+activation_code = (
+    "1$prod.smdp-plus.rsp.goog$3TD6-8L82-HUE1-LVN6"
+)
 
     return {
         "provider": "MCOE",
