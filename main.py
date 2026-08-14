@@ -191,31 +191,23 @@ def esim_provision(device_id: str):
 # ==================================================
 
 @app.get("/api/esim/status")
-def esim_status(
-    device_id: str
-):
+def esim_status(device_id: str):
 
     device = devices.get(device_id)
 
     if not device:
 
         return {
-
             "device_id": device_id,
-
             "registered": False,
-
-            "esim": False
+            "status": "not_registered"
         }
 
     return {
-
         "device_id": device_id,
-
         "registered": True,
-
-        "esim":
-            device["esim"]
+        "status": "pending",
+        "esim_active": False
     }
 
 
