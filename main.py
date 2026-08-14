@@ -121,7 +121,7 @@ def heartbeat(
 @app.post("/api/esim/provision")
 def esim_provision(
     device_id: str,
-    eid: str | None = None
+    eid: Optional[str] = None
 ):
 
     device = devices.get(device_id)
@@ -166,24 +166,12 @@ def esim_provision(
 
 
     return {
-
-        "provider":
-            "MCOE",
-
-        "device_id":
-            device_id,
-
-        "request_id":
-            request_id,
-
-        "type":
-            "esim",
-
-        "status":
-            "pending",
-
-        "message":
-            "eSIM provisioning request received"
+        "provider": "MCOE",
+        "device_id": device_id,
+        "type": "esim",
+        "status": "pending",
+        "message": "eSIM provisioning request received",
+        "eid_received": eid is not None
     }
 
 
