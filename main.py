@@ -165,6 +165,18 @@ def heartbeat(
 @app.get("/api/esim/provision")
 def esim_provision(device_id: str):
 
+    device = devices.get(device_id)
+
+    if not device:
+
+        return {
+            "provider": "MCOE",
+            "device_id": device_id,
+            "type": "esim",
+            "status": "device_not_registered",
+            "message": "Register device first"
+        }
+
     return {
         "provider": "MCOE",
         "device_id": device_id,
