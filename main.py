@@ -1,74 +1,46 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import secrets
 
-
 app = FastAPI(
-    title="MCOE Server",
-    version="1.0.0"
+    title="MCOE eSIM Provisioning Server",
+    version="2.0.0"
 )
 
-
-# --------------------------------------------------
-# IN-MEMORY DEVICE DATABASE
-# --------------------------------------------------
-
 devices = {}
+esim_requests = {}
 
 
-# --------------------------------------------------
+# =========================================================
 # ROOT
-# --------------------------------------------------
+# =========================================================
 
 @app.get("/")
 def root():
 
     return {
-        "name": "MCOE Server",
+        "name": "MCOE eSIM Server",
         "status": "online",
-        "version": "1.0.0"
+        "version": "2.0.0"
     }
 
 
-# --------------------------------------------------
+# =========================================================
 # HEALTH
-# --------------------------------------------------
+# =========================================================
 
 @app.get("/health")
 def health():
 
     return {
         "status": "healthy",
-        "server": "MCOE Server"
+        "server": "MCOE eSIM Server"
     }
 
 
-# --------------------------------------------------
-# LOGIN
-# --------------------------------------------------
-
-@app.post("/api/login")
-def login(
-    username: str,
-    password: str
-):
-
-    if username == "mcoe" and password == "mcoe":
-
-        return {
-            "success": True,
-            "access_token": secrets.token_urlsafe(32)
-        }
-
-    return {
-        "success": False,
-        "message": "Invalid username or password"
-    }
-
-
-# --------------------------------------------------
-# DEVICE REGISTER
-# --------------------------------------------------
+# =========================================================
+# DEVICE REGISTRATION
+# =========================================================
 
 @app.post("/api/device/register")
 def register_device(
@@ -91,15 +63,9 @@ def register_device(
         "last_seen":
             datetime.utcnow().isoformat(),
 
-        "hotspot": False,
+        "eid": None,
 
-        "connected_clients": 0,
-
-        "rx_bytes": 0,
-
-        "tx_bytes": 0,
-
-        "esim": False
+        "esim_status": "not_provisioned"
     }
 
     return {
@@ -112,9 +78,9 @@ def register_device(
     }
 
 
-# --------------------------------------------------
+# =========================================================
 # DEVICE HEARTBEAT
-# --------------------------------------------------
+# =========================================================
 
 @app.post("/api/device/heartbeat")
 def heartbeat(
@@ -126,126 +92,107 @@ def heartbeat(
 
     if not device:
 
-        return {
+        raise HTTPException(
+            status_code=404,
+            detail="Device not registered"
+        )
 
-            "ok": False,
+    if device["device_token"] != device_token:
 
-            "message":
-                "Device not registered"
-        }
-
-    if (
-        device["device_token"]
-        != device_token
-    ):
-
-        return {
-
-            "ok": False,
-
-            "message":
-                "Invalid device token"
-        }
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid device token"
+        )
 
     device["online"] = True
 
-    device["last_seen"] = (
+    device["last_seen"] = \
         datetime.utcnow().isoformat()
-    )
 
     return {
         "ok": True
     }
 
 
-# ==================================================
-# ESIM PROVISIONING
-# ==================================================
+# =========================================================
+# eSIM PROVISION REQUEST
+# =========================================================
 
-@app.get("/api/esim/provision")
-def esim_provision(device_id: str):
+@app.post("/api/esim/provision")
+def esim_provision(
+    device_id: str,
+    eid: str | None = None
+):
 
     device = devices.get(device_id)
 
     if not device:
 
-        return {
-            "provider": "MCOE",
-            "device_id": device_id,
-            "type": "esim",
-            "status": "device_not_registered",
-            "message": "Register device first"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Device not registered"
+        )
 
-    return {
-        "provider": "MCOE",
-        "device_id": device_id,
-        "type": "esim",
-        "status": "pending",
-        "message": "eSIM provisioning request received"
+
+    # Save EID if supplied
+    if eid:
+
+        device["eid"] = eid
+
+
+    request_id = secrets.token_urlsafe(24)
+
+
+    esim_requests[request_id] = {
+
+        "request_id":
+            request_id,
+
+        "device_id":
+            device_id,
+
+        "eid":
+            eid,
+
+        "status":
+            "pending",
+
+        "created_at":
+            datetime.utcnow().isoformat()
     }
 
 
-# ==================================================
-# ESIM STATUS
-# ==================================================
+    device["esim_status"] = "pending"
+
+
+    return {
+
+        "provider":
+            "MCOE",
+
+        "device_id":
+            device_id,
+
+        "request_id":
+            request_id,
+
+        "type":
+            "esim",
+
+        "status":
+            "pending",
+
+        "message":
+            "eSIM provisioning request received"
+    }
+
+
+# =========================================================
+# eSIM STATUS
+# =========================================================
 
 @app.get("/api/esim/status")
-def esim_status(device_id: str):
-
-    device = devices.get(device_id)
-
-    if not device:
-
-        return {
-            "device_id": device_id,
-            "registered": False,
-            "status": "not_registered"
-        }
-
-    return {
-        "device_id": device_id,
-        "registered": True,
-        "status": "pending",
-        "esim_active": False
-    }
-
-
-# ==================================================
-# HOTSPOT CONFIGURATION
-# ==================================================
-
-@app.get("/api/hotspot/config")
-def hotspot_config(
-    device_id: str
-):
-
-    return {
-
-        "name": "MCOE",
-
-        "version": 1,
-
-        "hotspot": {
-
-            "ssid":
-                "MCOE-Hotspot",
-
-            "password":
-                "MCOE12345678",
-
-            "max_clients":
-                10
-        }
-    }
-
-
-# ==================================================
-# HOTSPOT START
-# ==================================================
-
-@app.post("/api/hotspot/start")
-def hotspot_start(
+def esim_status(
     device_id: str
 ):
 
@@ -253,214 +200,26 @@ def hotspot_start(
 
     if not device:
 
-        return {
+        raise HTTPException(
+            status_code=404,
+            detail="Device not registered"
+        )
 
-            "success": False,
-
-            "message":
-                "Device not registered"
-        }
-
-    device["hotspot"] = True
 
     return {
 
-        "success": True,
+        "provider":
+            "MCOE",
 
         "device_id":
             device_id,
 
-        "command":
-            "START_HOTSPOT"
-    }
+        "eid":
+            device["eid"],
 
+        "status":
+            device["esim_status"],
 
-# ==================================================
-# HOTSPOT STOP
-# ==================================================
-
-@app.post("/api/hotspot/stop")
-def hotspot_stop(
-    device_id: str
-):
-
-    device = devices.get(device_id)
-
-    if not device:
-
-        return {
-
-            "success": False,
-
-            "message":
-                "Device not registered"
-        }
-
-    device["hotspot"] = False
-
-    return {
-
-        "success": True,
-
-        "device_id":
-            device_id,
-
-        "command":
-            "STOP_HOTSPOT"
-    }
-
-
-# ==================================================
-# HOTSPOT STATUS
-# ==================================================
-
-@app.get("/api/hotspot/status")
-def hotspot_status(
-    device_id: str
-):
-
-    device = devices.get(device_id)
-
-    if not device:
-
-        return {
-
-            "device_id":
-                device_id,
-
-            "hotspot":
-                False,
-
-            "connected_clients":
-                0,
-
-            "rx_bytes":
-                0,
-
-            "tx_bytes":
-                0
-        }
-
-    return {
-
-        "device_id":
-            device_id,
-
-        "hotspot":
-            device["hotspot"],
-
-        "connected_clients":
-            device["connected_clients"],
-
-        "rx_bytes":
-            device["rx_bytes"],
-
-        "tx_bytes":
-            device["tx_bytes"]
-    }
-
-
-# ==================================================
-# DEVICE USAGE
-# ==================================================
-
-@app.post("/api/device/usage")
-def device_usage(
-
-    device_id: str,
-
-    device_token: str,
-
-    rx_bytes: int = 0,
-
-    tx_bytes: int = 0,
-
-    connected_clients: int = 0
-):
-
-    device = devices.get(device_id)
-
-    if not device:
-
-        return {
-
-            "ok": False,
-
-            "message":
-                "Device not registered"
-        }
-
-    if (
-        device["device_token"]
-        != device_token
-    ):
-
-        return {
-
-            "ok": False,
-
-            "message":
-                "Invalid device token"
-        }
-
-    device["rx_bytes"] = rx_bytes
-
-    device["tx_bytes"] = tx_bytes
-
-    device["connected_clients"] = (
-        connected_clients
-    )
-
-    return {
-        "ok": True
-    }
-
-
-# ==================================================
-# DEVICE STATUS
-# ==================================================
-
-@app.get("/api/device/status")
-def device_status(
-    device_id: str
-):
-
-    device = devices.get(device_id)
-
-    if not device:
-
-        return {
-            "registered": False
-        }
-
-    return {
-
-        "registered": True,
-
-        "device_id":
-            device["device_id"],
-
-        "device_name":
-            device["device_name"],
-
-        "online":
-            device["online"],
-
-        "last_seen":
-            device["last_seen"],
-
-        "hotspot":
-            device["hotspot"],
-
-        "connected_clients":
-            device["connected_clients"],
-
-        "rx_bytes":
-            device["rx_bytes"],
-
-        "tx_bytes":
-            device["tx_bytes"],
-
-        "esim":
-            device["esim"]
+        "esim_active":
+            device["esim_status"] == "active"
     }
