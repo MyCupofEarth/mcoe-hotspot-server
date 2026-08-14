@@ -1,3 +1,46 @@
+from fastapi import FastAPI, HTTPException
+
+app = FastAPI()
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "MCOE",
+        "status": "online"
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy"
+    }
+
+
+@app.get("/api/esim/provision")
+def esim_provision(device_id: str):
+
+    # IMPORTANT:
+    # Replace this with a real activation code
+    # supplied by your eSIM/SM-DP+ provider.
+    activation_code = "REPLACE_WITH_REAL_ACTIVATION_CODE"
+
+    if activation_code == "REPLACE_WITH_REAL_ACTIVATION_CODE":
+        raise HTTPException(
+            status_code=503,
+            detail="MCOE eSIM provisioning is not configured."
+        )
+
+    return {
+        "provider": "MCOE",
+        "device_id": device_id,
+        "type": "esim",
+        "activation_code": activation_code
+    }
+
+
+
 {
   "name": "MCOE",
   "version": 1,
