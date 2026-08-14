@@ -118,60 +118,31 @@ def heartbeat(
 # eSIM PROVISION REQUEST
 # =========================================================
 
-@app.post("/api/esim/provision")
-def esim_provision(
-    device_id: str,
-    eid: Optional[str] = None
-):
+@app.get("/api/esim/provision")
+def esim_provision(device_id: str):
 
-    device = devices.get(device_id)
+    # Android/AOSP TS.48 test profile
+    smdp_address = "prod.smdp-plus.rsp.goog"
 
-    if not device:
+    matching_id = "3TD6-8L82-HUE1-LVN6"
 
-        raise HTTPException(
-            status_code=404,
-            detail="Device not registered"
-        )
-
-
-    # Save EID if supplied
-    if eid:
-
-        device["eid"] = eid
-
-
-    request_id = secrets.token_urlsafe(24)
-
-
-    esim_requests[request_id] = {
-
-        "request_id":
-            request_id,
-
-        "device_id":
-            device_id,
-
-        "eid":
-            eid,
-
-        "status":
-            "pending",
-
-        "created_at":
-            datetime.utcnow().isoformat()
-    }
-
-
-    device["esim_status"] = "pending"
-
+    activation_code = (
+        f"1${smdp_address}${matching_id}"
+    )
 
     return {
         "provider": "MCOE",
         "device_id": device_id,
         "type": "esim",
-        "status": "pending",
-        "message": "eSIM provisioning request received",
-        "eid_received": eid is not None
+        "status": "ready",
+
+        "smdp_address": smdp_address,
+
+        "matching_id": matching_id,
+
+        "activation_code": activation_code,
+
+        "message": "MCOE test eSIM profile ready"
     }
 
 
