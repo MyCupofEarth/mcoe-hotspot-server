@@ -122,14 +122,11 @@ def heartbeat(
 def esim_provision(device_id: str):
 
     # Android/AOSP TS.48 test profile
-    smdp_address = "rsp.truphone.com"
-matching_id = "QR-G-5C-1LS-1W1Z9P7"
+    smdp_address = "prod.smdp-plus.rsp.goog"
+matching_id = "3TD6-8L82-HUE1-LVN6"
 
 activation_code = (
-    "1$rsp.truphone.com$QR-G-5C-1LS-1W1Z9P7"
-
-
-    
+    "1$prod.smdp-plus.rsp.goog$3TD6-8L82-HUE1-LVN6"
 
     
 )
