@@ -1,9 +1,0 @@
-{
-  "name": "MCOE",
-  "version": 1,
-  "hotspot": {
-    "ssid": "MCOE-Hotspot",
-    "password": "MCOE12345678",
-    "max_clients": 10
-  }
-}
