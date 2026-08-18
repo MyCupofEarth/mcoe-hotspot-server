@@ -307,13 +307,35 @@ def request_esim_provision(device_id: str):
     device = devices.get(device_id)
 
     if not device:
-
         raise HTTPException(
             status_code=404,
             detail="Device not registered"
         )
 
+    if not device["eid"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Device EID has not been registered"
+        )
+
+    # Find an available authorized test profile
+    profile = None
+
+    for candidate in test_profiles.values():
+
+        if candidate["status"] == "available":
+            profile = candidate
+            break
+
+    if not profile:
+        raise HTTPException(
+            status_code=503,
+            detail="No authorized test eSIM profile available"
+        )
+
     request_id = generate_request_id()
+
+    matching_id = profile["matching_id"]
 
     esim_requests[request_id] = {
 
@@ -323,6 +345,10 @@ def request_esim_provision(device_id: str):
 
         "eid": device["eid"],
 
+        "matching_id": matching_id,
+
+        "smdp_address": SM_DP_PLUS_ADDRESS,
+
         "status": "pending",
 
         "created_at": utc_now(),
@@ -331,6 +357,9 @@ def request_esim_provision(device_id: str):
     }
 
     device["esim_status"] = "provisioning"
+
+    # Reserve profile
+    profile["status"] = "reserved"
 
     return {
 
@@ -342,11 +371,14 @@ def request_esim_provision(device_id: str):
 
         "eid": device["eid"],
 
-        "type": "esim",
-
         "status": "pending",
 
-        "message": "MCOE eSIM provisioning request created"
+        "smdp_address": SM_DP_PLUS_ADDRESS,
+
+        "matching_id": matching_id,
+
+        "message":
+            "Authorized MCOE test profile reserved"
     }
 
 
