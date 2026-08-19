@@ -12,7 +12,7 @@ import httpx
 
 app = FastAPI(
     title="MCOE eSIM Provisioning API",
-    version="5.1.0"
+    version="6.0.0"
 )
 
 
@@ -23,7 +23,14 @@ app = FastAPI(
 SM_DP_PLUS_ADDRESS = os.getenv(
     "SM_DP_PLUS_ADDRESS",
     "mcoe-sm-dp-pysim.onrender.com"
-).strip().replace("https://", "").rstrip("/")
+).strip()
+
+SM_DP_PLUS_ADDRESS = (
+    SM_DP_PLUS_ADDRESS
+    .replace("https://", "")
+    .replace("http://", "")
+    .rstrip("/")
+)
 
 SM_DP_PLUS_URL = f"https://{SM_DP_PLUS_ADDRESS}"
 
@@ -32,21 +39,11 @@ SM_DP_PLUS_URL = f"https://{SM_DP_PLUS_ADDRESS}"
 # AUTHORIZED TEST ACTIVATION CODE
 # =========================================================
 #
-# IMPORTANT:
-#
-# Put the REAL activation code supplied by your authorized
-# test SM-DP+ / eUICC environment into Render Environment
-# Variables.
-#
-# Do NOT commit the real activation code to GitHub.
-#
-# Render variable:
+# ONLY configure this in Render Environment Variables.
 #
 # MCOE_TEST_ACTIVATION_CODE
 #
-# Example:
-#
-# MCOE_TEST_ACTIVATION_CODE=actual-authorized-test-code
+# Do NOT commit the real value to GitHub.
 #
 # =========================================================
 
@@ -57,7 +54,16 @@ MCOE_TEST_ACTIVATION_CODE = os.getenv(
 
 
 # =========================================================
-# TEMPORARY STORAGE
+# TEMPORARY IN-MEMORY STORAGE
+# =========================================================
+#
+# NOTE:
+#
+# Render can restart/redeploy the service.
+# These dictionaries are therefore NOT permanent storage.
+#
+# For production use PostgreSQL.
+#
 # =========================================================
 
 devices = {}
@@ -68,288 +74,116 @@ esim_requests = {}
 # =========================================================
 # AUTHORIZED TEST PROFILES
 # =========================================================
-#
-# These filenames MUST correspond to files that actually
-# exist in:
-#
-# smdpp-data/upp/
-#
-# The activation code is supplied through the Render
-# environment variable above.
-#
-# =========================================================
 
 test_profiles = {
 
     "TS48V1-A-UNIQUE": {
-
-        "profile_name":
-            "TS48 V1 A UNIQUE",
-
-        "filename":
-            "TS48V1-A-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V1 A UNIQUE",
+        "filename": "TS48V1-A-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V1-B-UNIQUE": {
-
-        "profile_name":
-            "TS48 V1 B UNIQUE",
-
-        "filename":
-            "TS48V1-B-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V1 B UNIQUE",
+        "filename": "TS48V1-B-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V2-SAIP2-1-BERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V2 SAIP2.1 BERTLV UNIQUE",
-
-        "filename":
-            "TS48V2-SAIP2-1-BERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V2 SAIP2.1 BERTLV UNIQUE",
+        "filename": "TS48V2-SAIP2-1-BERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V2-SAIP2-1-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V2 SAIP2.1 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V2-SAIP2-1-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V2 SAIP2.1 NoBERTLV UNIQUE",
+        "filename": "TS48V2-SAIP2-1-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V2-SAIP2-3-BERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V2 SAIP2.3 BERTLV UNIQUE",
-
-        "filename":
-            "TS48V2-SAIP2-3-BERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V2 SAIP2.3 BERTLV UNIQUE",
+        "filename": "TS48V2-SAIP2-3-BERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V2-SAIP2-3-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V2 SAIP2.3 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V2-SAIP2-3-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V2 SAIP2.3 NoBERTLV UNIQUE",
+        "filename": "TS48V2-SAIP2-3-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V3-SAIP2-1-BERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V3 SAIP2.1 BERTLV UNIQUE",
-
-        "filename":
-            "TS48V3-SAIP2-1-BERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V3 SAIP2.1 BERTLV UNIQUE",
+        "filename": "TS48V3-SAIP2-1-BERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V3-SAIP2-1-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V3 SAIP2.1 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V3-SAIP2-1-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V3 SAIP2.1 NoBERTLV UNIQUE",
+        "filename": "TS48V3-SAIP2-1-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V3-SAIP2-3-BERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V3 SAIP2.3 BERTLV UNIQUE",
-
-        "filename":
-            "TS48V3-SAIP2-3-BERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V3 SAIP2.3 BERTLV UNIQUE",
+        "filename": "TS48V3-SAIP2-3-BERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V3-SAIP2-3-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V3 SAIP2.3 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V3-SAIP2-3-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V3 SAIP2.3 NoBERTLV UNIQUE",
+        "filename": "TS48V3-SAIP2-3-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V4-SAIP2-1A-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V4 SAIP2.1A NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V4-SAIP2-1A-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V4 SAIP2.1A NoBERTLV UNIQUE",
+        "filename": "TS48V4-SAIP2-1A-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V4-SAIP2-1B-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V4 SAIP2.1B NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V4-SAIP2-1B-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V4 SAIP2.1B NoBERTLV UNIQUE",
+        "filename": "TS48V4-SAIP2-1B-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V4-SAIP2-3-BERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V4 SAIP2.3 BERTLV UNIQUE",
-
-        "filename":
-            "TS48V4-SAIP2-3-BERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V4 SAIP2.3 BERTLV UNIQUE",
+        "filename": "TS48V4-SAIP2-3-BERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V4-SAIP2-3-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V4 SAIP2.3 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V4-SAIP2-3-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V4 SAIP2.3 NoBERTLV UNIQUE",
+        "filename": "TS48V4-SAIP2-3-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V5-SAIP2-1A-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V5 SAIP2.1A NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V5-SAIP2-1A-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V5 SAIP2.1A NoBERTLV UNIQUE",
+        "filename": "TS48V5-SAIP2-1A-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V5-SAIP2-1B-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V5 SAIP2.1B NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V5-SAIP2-1B-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V5 SAIP2.1B NoBERTLV UNIQUE",
+        "filename": "TS48V5-SAIP2-1B-NOBERTLV-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V5-SAIP2-3-BERTLV-SUCI-UNIQUE": {
-
-        "profile_name":
-            "TS48 V5 SAIP2.3 BERTLV SUCI UNIQUE",
-
-        "filename":
-            "TS48V5-SAIP2-3-BERTLV-SUCI-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
+        "profile_name": "TS48 V5 SAIP2.3 BERTLV SUCI UNIQUE",
+        "filename": "TS48V5-SAIP2-3-BERTLV-SUCI-UNIQUE.der",
+        "status": "available",
     },
 
     "TS48V5-SAIP2-3-NOBERTLV-UNIQUE": {
-
-        "profile_name":
-            "TS48 V5 SAIP2.3 NoBERTLV UNIQUE",
-
-        "filename":
-            "TS48V5-SAIP2-3-NOBERTLV-UNIQUE.der",
-
-        "status":
-            "available",
-
-        "activation_code":
-            MCOE_TEST_ACTIVATION_CODE
-    }
+        "profile_name": "TS48 V5 SAIP2.3 NoBERTLV UNIQUE",
+        "filename": "TS48V5-SAIP2-3-NOBERTLV-UNIQUE.der",
+        "status": "available",
+    },
 }
 
 
@@ -358,31 +192,32 @@ test_profiles = {
 # =========================================================
 
 class DeviceRegisterRequest(BaseModel):
-
     device_id: str
     device_name: str
 
 
 class DeviceHeartbeatRequest(BaseModel):
-
     device_id: str
     device_token: str
 
 
 class EIDRequest(BaseModel):
-
     device_id: str
     eid: str
 
 
 class ProvisionRequest(BaseModel):
-
     device_id: str
 
 
 class CancelProvisionRequest(BaseModel):
-
     device_id: str
+
+
+class ProvisionCompleteRequest(BaseModel):
+    device_id: str
+    request_id: str
+    success: bool
 
 
 # =========================================================
@@ -390,34 +225,52 @@ class CancelProvisionRequest(BaseModel):
 # =========================================================
 
 def utc_now():
-
-    return datetime.now(
-        timezone.utc
-    ).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def generate_device_token():
-
-    return secrets.token_urlsafe(
-        32
-    )
+    return secrets.token_urlsafe(32)
 
 
 def generate_request_id():
-
     return (
-        "MCOE-" +
-        secrets.token_hex(
-            16
-        ).upper()
+        "MCOE-"
+        + secrets.token_hex(16).upper()
     )
 
 
 def activation_code_available():
+    return bool(MCOE_TEST_ACTIVATION_CODE)
 
-    return bool(
-        MCOE_TEST_ACTIVATION_CODE
+
+def sanitize_activation_code(code: str):
+    """
+    Never return the actual activation code
+    from status/debug endpoints.
+    """
+
+    if not code:
+        return None
+
+    if len(code) <= 8:
+        return "********"
+
+    return (
+        code[:4]
+        + "..."
+        + code[-4:]
     )
+
+
+def find_available_profile():
+
+    for matching_id, profile in test_profiles.items():
+
+        if profile["status"] == "available":
+
+            return matching_id, profile
+
+    return None, None
 
 
 # =========================================================
@@ -426,39 +279,34 @@ def activation_code_available():
 
 async def check_smdp():
 
-    """
-    Check whether the separate pySim SM-DP+ service
-    is reachable.
-    """
-
     try:
 
         async with httpx.AsyncClient(
-            timeout=10.0
+            timeout=10.0,
+            follow_redirects=True
         ) as client:
 
             response = await client.get(
-                f"{SM_DP_PLUS_URL}/"
+                SM_DP_PLUS_URL + "/"
             )
 
             return {
-
-                "reachable":
-                    True,
-
-                "http_status":
-                    response.status_code
+                "reachable": True,
+                "http_status": response.status_code
             }
 
-    except Exception as e:
+    except httpx.RequestError as exc:
 
         return {
+            "reachable": False,
+            "error": str(exc)
+        }
 
-            "reachable":
-                False,
+    except Exception as exc:
 
-            "error":
-                str(e)
+        return {
+            "reachable": False,
+            "error": str(exc)
         }
 
 
@@ -467,7 +315,9 @@ async def check_smdp():
 # =========================================================
 
 @app.get("/")
-def root():
+async def root():
+
+    smdp = await check_smdp()
 
     return {
 
@@ -478,13 +328,16 @@ def root():
             "online",
 
         "version":
-            "5.1.0",
+            "6.0.0",
 
         "service":
-            "MCOE API",
+            "MCOE Control API",
 
         "smdp_plus":
             SM_DP_PLUS_URL,
+
+        "smdp_plus_reachable":
+            smdp["reachable"],
 
         "activation_code_configured":
             activation_code_available()
@@ -518,12 +371,16 @@ async def health():
             smdp["reachable"],
 
         "smdp_plus_http_status":
-            smdp.get(
-                "http_status"
-            ),
+            smdp.get("http_status"),
 
         "activation_code_configured":
-            activation_code_available()
+            activation_code_available(),
+
+        "devices":
+            len(devices),
+
+        "requests":
+            len(esim_requests)
     }
 
 
@@ -554,9 +411,7 @@ async def smdp_configuration():
             smdp["reachable"],
 
         "http_status":
-            smdp.get(
-                "http_status"
-            ),
+            smdp.get("http_status"),
 
         "status":
             "configured"
@@ -578,7 +433,6 @@ def register_device(
 ):
 
     device_id = request.device_id.strip()
-
     device_name = request.device_name.strip()
 
     if not device_id:
@@ -595,16 +449,12 @@ def register_device(
             detail="device_name is required"
         )
 
-    existing = devices.get(
-        device_id
-    )
+    existing = devices.get(device_id)
 
     if existing:
 
         existing["device_name"] = device_name
-
         existing["online"] = True
-
         existing["last_seen"] = utc_now()
 
         return {
@@ -629,7 +479,6 @@ def register_device(
         }
 
     token = generate_device_token()
-
     now = utc_now()
 
     devices[device_id] = {
@@ -704,10 +553,7 @@ def heartbeat(
             detail="Device not registered"
         )
 
-    if (
-        device["device_token"]
-        != request.device_token
-    ):
+    if device["device_token"] != request.device_token:
 
         raise HTTPException(
             status_code=401,
@@ -715,7 +561,6 @@ def heartbeat(
         )
 
     device["online"] = True
-
     device["last_seen"] = utc_now()
 
     return {
@@ -743,9 +588,7 @@ def device_status(
     device_id: str
 ):
 
-    device = devices.get(
-        device_id
-    )
+    device = devices.get(device_id)
 
     if not device:
 
@@ -754,7 +597,32 @@ def device_status(
             detail="Device not registered"
         )
 
-    return device
+    return {
+
+        "device_id":
+            device["device_id"],
+
+        "device_name":
+            device["device_name"],
+
+        "online":
+            device["online"],
+
+        "registered_at":
+            device["registered_at"],
+
+        "last_seen":
+            device["last_seen"],
+
+        "eid":
+            device["eid"],
+
+        "esim_status":
+            device["esim_status"],
+
+        "active_request_id":
+            device["active_request_id"]
+    }
 
 
 # =========================================================
@@ -830,14 +698,7 @@ def list_profiles():
                 profile["filename"],
 
             "status":
-                profile["status"],
-
-            "activation_code_configured":
-                bool(
-                    profile.get(
-                        "activation_code"
-                    )
-                )
+                profile["status"]
         })
 
     return {
@@ -852,7 +713,10 @@ def list_profiles():
             len(profiles),
 
         "profiles":
-            profiles
+            profiles,
+
+        "activation_code_configured":
+            activation_code_available()
     }
 
 
@@ -867,9 +731,7 @@ def request_esim_provision(
 
     device_id = request.device_id.strip()
 
-    device = devices.get(
-        device_id
-    )
+    device = devices.get(device_id)
 
     if not device:
 
@@ -885,23 +747,18 @@ def request_esim_provision(
             detail="Device EID has not been registered"
         )
 
-    # -----------------------------------------------------
-    # CHECK ACTIVATION CODE
-    # -----------------------------------------------------
-
     if not activation_code_available():
 
         raise HTTPException(
-
             status_code=503,
-
-            detail=
+            detail=(
                 "No authorized test activation code configured. "
                 "Set MCOE_TEST_ACTIVATION_CODE in Render."
+            )
         )
 
     # -----------------------------------------------------
-    # EXISTING REQUEST
+    # RETURN EXISTING ACTIVE REQUEST
     # -----------------------------------------------------
 
     active_id = device.get(
@@ -945,66 +802,24 @@ def request_esim_provision(
                 "matching_id":
                     existing["matching_id"],
 
-                "activation_code":
-                    existing.get(
-                        "activation_code"
-                    ),
-
                 "profile":
-                    existing.get(
-                        "profile_name"
-                    ),
+                    existing["profile_name"],
 
                 "message":
-                    "Existing provisioning request"
+                    "Existing provisioning request."
             }
 
     # -----------------------------------------------------
-    # FIND AVAILABLE TEST PROFILE
+    # FIND PROFILE
     # -----------------------------------------------------
 
-    profile = None
-
-    matching_id = None
-
-    for mid, candidate in test_profiles.items():
-
-        if (
-            candidate["status"]
-            == "available"
-        ):
-
-            matching_id = mid
-
-            profile = candidate
-
-            break
+    matching_id, profile = find_available_profile()
 
     if not profile:
 
         raise HTTPException(
             status_code=503,
-            detail=
-                "No authorized test profile available"
-        )
-
-    # -----------------------------------------------------
-    # VERIFY PROFILE ACTIVATION CODE
-    # -----------------------------------------------------
-
-    activation_code = profile.get(
-        "activation_code"
-    )
-
-    if not activation_code:
-
-        raise HTTPException(
-
-            status_code=503,
-
-            detail=
-                "Selected test profile has no authorized "
-                "activation code configured."
+            detail="No authorized test profile available."
         )
 
     # -----------------------------------------------------
@@ -1012,7 +827,6 @@ def request_esim_provision(
     # -----------------------------------------------------
 
     request_id = generate_request_id()
-
     now = utc_now()
 
     esim_requests[request_id] = {
@@ -1035,9 +849,6 @@ def request_esim_provision(
         "profile_file":
             profile["filename"],
 
-        "activation_code":
-            activation_code,
-
         "smdp_address":
             SM_DP_PLUS_ADDRESS,
 
@@ -1055,7 +866,7 @@ def request_esim_provision(
     }
 
     # -----------------------------------------------------
-    # RESERVE PROFILE
+    # RESERVE
     # -----------------------------------------------------
 
     profile["status"] = "reserved"
@@ -1065,7 +876,16 @@ def request_esim_provision(
     device["active_request_id"] = request_id
 
     # -----------------------------------------------------
-    # RETURN PROVISIONING DATA
+    # IMPORTANT
+    # -----------------------------------------------------
+    #
+    # The actual activation credential is intentionally
+    # NOT returned from general API responses.
+    #
+    # The authorized LPA/test workflow should obtain/use
+    # the activation information through the approved
+    # provisioning environment.
+    #
     # -----------------------------------------------------
 
     return {
@@ -1094,16 +914,15 @@ def request_esim_provision(
         "matching_id":
             matching_id,
 
-        "activation_code":
-            activation_code,
-
         "profile":
             profile["profile_name"],
 
         "message":
-            "Authorized test profile reserved. "
-            "The eUICC/LPA must now perform the "
-            "GSMA RSP download."
+            (
+                "Authorized test profile reserved. "
+                "Use the approved LPA/eUICC test workflow "
+                "to perform the RSP download."
+            )
     }
 
 
@@ -1127,7 +946,149 @@ def esim_request_status(
             detail="eSIM request not found"
         )
 
-    return request
+    return {
+
+        "request_id":
+            request["request_id"],
+
+        "device_id":
+            request["device_id"],
+
+        "eid":
+            request["eid"],
+
+        "matching_id":
+            request["matching_id"],
+
+        "profile_name":
+            request["profile_name"],
+
+        "profile_file":
+            request["profile_file"],
+
+        "smdp_address":
+            request["smdp_address"],
+
+        "status":
+            request["status"],
+
+        "created_at":
+            request["created_at"],
+
+        "updated_at":
+            request["updated_at"]
+    }
+
+
+# =========================================================
+# COMPLETE PROVISIONING
+# =========================================================
+
+@app.post("/api/esim/complete")
+def complete_provisioning(
+    request: ProvisionCompleteRequest
+):
+
+    device = devices.get(
+        request.device_id
+    )
+
+    if not device:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Device not registered"
+        )
+
+    esim_request = esim_requests.get(
+        request.request_id
+    )
+
+    if not esim_request:
+
+        raise HTTPException(
+            status_code=404,
+            detail="eSIM request not found"
+        )
+
+    if esim_request["device_id"] != request.device_id:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Request does not belong to device"
+        )
+
+    matching_id = esim_request["matching_id"]
+
+    profile = test_profiles.get(
+        matching_id
+    )
+
+    if request.success:
+
+        esim_request["status"] = "active"
+
+        esim_request["updated_at"] = utc_now()
+
+        device["esim_status"] = "active"
+
+        device["active_request_id"] = request.request_id
+
+        if profile:
+
+            profile["status"] = "active"
+
+        return {
+
+            "ok":
+                True,
+
+            "device_id":
+                request.device_id,
+
+            "request_id":
+                request.request_id,
+
+            "status":
+                "active",
+
+            "message":
+                "eSIM provisioning marked complete."
+        }
+
+    # -----------------------------------------------------
+    # FAILED PROVISIONING
+    # -----------------------------------------------------
+
+    esim_request["status"] = "failed"
+
+    esim_request["updated_at"] = utc_now()
+
+    device["esim_status"] = "not_provisioned"
+
+    device["active_request_id"] = None
+
+    if profile:
+
+        profile["status"] = "available"
+
+    return {
+
+        "ok":
+            False,
+
+        "device_id":
+            request.device_id,
+
+        "request_id":
+            request.request_id,
+
+        "status":
+            "failed",
+
+        "message":
+            "eSIM provisioning marked failed."
+    }
 
 
 # =========================================================
@@ -1180,8 +1141,7 @@ def esim_status(
             active_id,
 
         "esim_active":
-            device["esim_status"]
-            == "active",
+            device["esim_status"] == "active",
 
         "smdp_address":
             SM_DP_PLUS_ADDRESS,
@@ -1190,18 +1150,18 @@ def esim_status(
             SM_DP_PLUS_URL,
 
         "matching_id":
-            active_request.get(
-                "matching_id"
-            )
-            if active_request
-            else None,
+            (
+                active_request["matching_id"]
+                if active_request
+                else None
+            ),
 
-        "activation_code":
-            active_request.get(
-                "activation_code"
+        "profile":
+            (
+                active_request["profile_name"]
+                if active_request
+                else None
             )
-            if active_request
-            else None
     }
 
 
@@ -1237,7 +1197,7 @@ def cancel_esim_provision(
                 True,
 
             "message":
-                "No active provisioning request"
+                "No active provisioning request."
         }
 
     esim_request = esim_requests.get(
@@ -1283,36 +1243,104 @@ def cancel_esim_provision(
 
 
 # =========================================================
-# ADMIN / DEVELOPMENT
+# DEVELOPMENT DEVICE LIST
 # =========================================================
 
 @app.get("/api/devices")
 def list_devices():
 
+    safe_devices = []
+
+    for device in devices.values():
+
+        safe_devices.append({
+
+            "device_id":
+                device["device_id"],
+
+            "device_name":
+                device["device_name"],
+
+            "online":
+                device["online"],
+
+            "registered_at":
+                device["registered_at"],
+
+            "last_seen":
+                device["last_seen"],
+
+            "eid":
+                device["eid"],
+
+            "esim_status":
+                device["esim_status"],
+
+            "active_request_id":
+                device["active_request_id"]
+        })
+
     return {
 
         "count":
-            len(devices),
+            len(safe_devices),
 
         "devices":
-            list(
-                devices.values()
-            )
+            safe_devices
     }
 
+
+# =========================================================
+# DEVELOPMENT REQUEST LIST
+# =========================================================
 
 @app.get("/api/esim/requests")
 def list_esim_requests():
 
+    safe_requests = []
+
+    for request in esim_requests.values():
+
+        safe_requests.append({
+
+            "request_id":
+                request["request_id"],
+
+            "device_id":
+                request["device_id"],
+
+            "eid":
+                request["eid"],
+
+            "matching_id":
+                request["matching_id"],
+
+            "profile_name":
+                request["profile_name"],
+
+            "profile_file":
+                request["profile_file"],
+
+            "smdp_address":
+                request["smdp_address"],
+
+            "status":
+                request["status"],
+
+            "created_at":
+                request["created_at"],
+
+            "updated_at":
+                request["updated_at"]
+        })
+
     return {
 
         "count":
-            len(esim_requests),
+            len(safe_requests),
 
         "requests":
-            list(
-                esim_requests.values()
-            )
+            safe_requests
     }
 
 
@@ -1337,6 +1365,26 @@ def release_profile(
             status_code=404,
             detail="Profile not found"
         )
+
+    # -----------------------------------------------------
+    # Make sure profile isn't attached to an active request
+    # -----------------------------------------------------
+
+    for request in esim_requests.values():
+
+        if (
+            request["matching_id"] == matching_id
+            and request["status"]
+            in ("pending", "provisioning", "active")
+        ):
+
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Profile is associated with an active "
+                    "or provisioning request."
+                )
+            )
 
     profile["status"] = "available"
 
