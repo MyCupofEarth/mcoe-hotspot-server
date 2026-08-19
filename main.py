@@ -12,7 +12,7 @@ import httpx
 
 app = FastAPI(
     title="MCOE eSIM Provisioning API",
-    version="6.0.0"
+    version="6.1.0"
 )
 
 
@@ -36,31 +36,13 @@ SM_DP_PLUS_URL = f"https://{SM_DP_PLUS_ADDRESS}"
 
 
 # =========================================================
-# AUTHORIZED TEST ACTIVATION CODE
-# =========================================================
-#
-# ONLY configure this in Render Environment Variables.
-#
-# MCOE_TEST_ACTIVATION_CODE
-#
-# Do NOT commit the real value to GitHub.
-#
-# =========================================================
-
-MCOE_TEST_ACTIVATION_CODE = os.getenv(
-    "MCOE_TEST_ACTIVATION_CODE",
-    ""
-).strip()
-
-
-# =========================================================
 # TEMPORARY IN-MEMORY STORAGE
 # =========================================================
 #
-# NOTE:
+# IMPORTANT:
 #
 # Render can restart/redeploy the service.
-# These dictionaries are therefore NOT permanent storage.
+# These dictionaries are NOT permanent storage.
 #
 # For production use PostgreSQL.
 #
@@ -72,7 +54,20 @@ esim_requests = {}
 
 
 # =========================================================
-# AUTHORIZED TEST PROFILES
+# PYSim TEST PROFILES
+# =========================================================
+#
+# The Matching ID must correspond to the profile that
+# actually exists on the pySim SM-DP+.
+#
+# Expected pySim location:
+#
+# smdpp-data/upp/<filename>
+#
+# Example:
+#
+# smdpp-data/upp/TS48V1-A-UNIQUE.der
+#
 # =========================================================
 
 test_profiles = {
@@ -239,29 +234,6 @@ def generate_request_id():
     )
 
 
-def activation_code_available():
-    return bool(MCOE_TEST_ACTIVATION_CODE)
-
-
-def sanitize_activation_code(code: str):
-    """
-    Never return the actual activation code
-    from status/debug endpoints.
-    """
-
-    if not code:
-        return None
-
-    if len(code) <= 8:
-        return "********"
-
-    return (
-        code[:4]
-        + "..."
-        + code[-4:]
-    )
-
-
 def find_available_profile():
 
     for matching_id, profile in test_profiles.items():
@@ -328,7 +300,7 @@ async def root():
             "online",
 
         "version":
-            "6.0.0",
+            "6.1.0",
 
         "service":
             "MCOE Control API",
@@ -339,8 +311,8 @@ async def root():
         "smdp_plus_reachable":
             smdp["reachable"],
 
-        "activation_code_configured":
-            activation_code_available()
+        "profile_count":
+            len(test_profiles)
     }
 
 
@@ -361,6 +333,9 @@ async def health():
         "server":
             "MCOE eSIM Provisioning API",
 
+        "version":
+            "6.1.0",
+
         "timestamp":
             utc_now(),
 
@@ -373,14 +348,14 @@ async def health():
         "smdp_plus_http_status":
             smdp.get("http_status"),
 
-        "activation_code_configured":
-            activation_code_available(),
-
         "devices":
             len(devices),
 
         "requests":
-            len(esim_requests)
+            len(esim_requests),
+
+        "profiles":
+            len(test_profiles)
     }
 
 
@@ -414,12 +389,9 @@ async def smdp_configuration():
             smdp.get("http_status"),
 
         "status":
-            "configured"
+            "reachable"
             if smdp["reachable"]
-            else "unreachable",
-
-        "activation_code_configured":
-            activation_code_available()
+            else "unreachable"
     }
 
 
@@ -713,10 +685,7 @@ def list_profiles():
             len(profiles),
 
         "profiles":
-            profiles,
-
-        "activation_code_configured":
-            activation_code_available()
+            profiles
     }
 
 
@@ -733,6 +702,10 @@ def request_esim_provision(
 
     device = devices.get(device_id)
 
+    # -----------------------------------------------------
+    # DEVICE MUST EXIST
+    # -----------------------------------------------------
+
     if not device:
 
         raise HTTPException(
@@ -740,21 +713,15 @@ def request_esim_provision(
             detail="Device not registered"
         )
 
+    # -----------------------------------------------------
+    # EID REQUIRED
+    # -----------------------------------------------------
+
     if not device["eid"]:
 
         raise HTTPException(
             status_code=400,
             detail="Device EID has not been registered"
-        )
-
-    if not activation_code_available():
-
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "No authorized test activation code configured. "
-                "Set MCOE_TEST_ACTIVATION_CODE in Render."
-            )
         )
 
     # -----------------------------------------------------
@@ -810,7 +777,18 @@ def request_esim_provision(
             }
 
     # -----------------------------------------------------
-    # FIND PROFILE
+    # CHECK SM-DP+
+    # -----------------------------------------------------
+
+    # Do not attempt to create a provisioning request when
+    # the configured SM-DP+ service cannot be reached.
+
+    # This check is intentionally not mandatory because
+    # Render/pySim may be waking from sleep. The profile
+    # reservation can still be created and the LPA can retry.
+
+    # -----------------------------------------------------
+    # FIND AVAILABLE PROFILE
     # -----------------------------------------------------
 
     matching_id, profile = find_available_profile()
@@ -819,7 +797,10 @@ def request_esim_provision(
 
         raise HTTPException(
             status_code=503,
-            detail="No authorized test profile available."
+            detail=(
+                "No test profile is currently available. "
+                "All configured profiles are reserved or active."
+            )
         )
 
     # -----------------------------------------------------
@@ -866,7 +847,7 @@ def request_esim_provision(
     }
 
     # -----------------------------------------------------
-    # RESERVE
+    # RESERVE PROFILE
     # -----------------------------------------------------
 
     profile["status"] = "reserved"
@@ -876,16 +857,7 @@ def request_esim_provision(
     device["active_request_id"] = request_id
 
     # -----------------------------------------------------
-    # IMPORTANT
-    # -----------------------------------------------------
-    #
-    # The actual activation credential is intentionally
-    # NOT returned from general API responses.
-    #
-    # The authorized LPA/test workflow should obtain/use
-    # the activation information through the approved
-    # provisioning environment.
-    #
+    # RETURN PROVISIONING INFORMATION
     # -----------------------------------------------------
 
     return {
@@ -917,11 +889,15 @@ def request_esim_provision(
         "profile":
             profile["profile_name"],
 
+        "profile_file":
+            profile["filename"],
+
         "message":
             (
-                "Authorized test profile reserved. "
-                "Use the approved LPA/eUICC test workflow "
-                "to perform the RSP download."
+                "Test profile reserved. "
+                "The authorized LPA/eUICC must perform "
+                "the RSP download using the configured "
+                "SM-DP+ and Matching ID."
             )
     }
 
@@ -968,6 +944,9 @@ def esim_request_status(
 
         "smdp_address":
             request["smdp_address"],
+
+        "smdp_url":
+            request["smdp_url"],
 
         "status":
             request["status"],
@@ -1024,6 +1003,10 @@ def complete_provisioning(
         matching_id
     )
 
+    # -----------------------------------------------------
+    # SUCCESS
+    # -----------------------------------------------------
+
     if request.success:
 
         esim_request["status"] = "active"
@@ -1057,7 +1040,7 @@ def complete_provisioning(
         }
 
     # -----------------------------------------------------
-    # FAILED PROVISIONING
+    # FAILURE
     # -----------------------------------------------------
 
     esim_request["status"] = "failed"
@@ -1324,6 +1307,9 @@ def list_esim_requests():
             "smdp_address":
                 request["smdp_address"],
 
+            "smdp_url":
+                request["smdp_url"],
+
             "status":
                 request["status"],
 
@@ -1367,7 +1353,7 @@ def release_profile(
         )
 
     # -----------------------------------------------------
-    # Make sure profile isn't attached to an active request
+    # Do not release an active profile
     # -----------------------------------------------------
 
     for request in esim_requests.values():
@@ -1375,7 +1361,11 @@ def release_profile(
         if (
             request["matching_id"] == matching_id
             and request["status"]
-            in ("pending", "provisioning", "active")
+            in (
+                "pending",
+                "provisioning",
+                "active"
+            )
         ):
 
             raise HTTPException(
