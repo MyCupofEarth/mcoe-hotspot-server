@@ -263,22 +263,25 @@ async def check_smdp():
             )
 
             return {
-                "reachable": True,
-                "http_status": response.status_code
+                "reachable": response.status_code < 500,
+                "http_status": response.status_code,
+                "endpoint": SM_DP_PLUS_URL
             }
 
     except httpx.RequestError as exc:
 
         return {
             "reachable": False,
-            "error": str(exc)
+            "error": str(exc),
+            "endpoint": SM_DP_PLUS_URL
         }
 
     except Exception as exc:
 
         return {
             "reachable": False,
-            "error": str(exc)
+            "error": str(exc),
+            "endpoint": SM_DP_PLUS_URL
         }
 
 
