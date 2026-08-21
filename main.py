@@ -720,12 +720,18 @@ def request_esim_provision(
     # EID REQUIRED
     # -----------------------------------------------------
 
-    if not device["eid"]:
+    if not device:
+    raise HTTPException(
+        status_code=404,
+        detail="Device is not registered"
+    )
 
-        raise HTTPException(
-            status_code=400,
-            detail="Device EID has not been registered"
-        )
+eid = device.get("eid")
+
+if eid:
+    print(f"EID registered: {eid}")
+else:
+    print("EID unavailable to Android app; continuing with activation-code provisioning")
 
     # -----------------------------------------------------
     # RETURN EXISTING ACTIVE REQUEST
