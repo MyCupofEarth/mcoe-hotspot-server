@@ -12,7 +12,7 @@ import httpx
 
 app = FastAPI(
     title="MCOE eSIM Provisioning API",
-    version="7.0.0"
+    version="8.0.0"
 )
 
 
@@ -36,15 +36,16 @@ SM_DP_PLUS_URL = f"https://{SM_DP_PLUS_ADDRESS}"
 
 
 # =========================================================
-# IN-MEMORY STORAGE
+# TEMPORARY STORAGE
 # =========================================================
 
 devices = {}
+
 esim_requests = {}
 
 
 # =========================================================
-# TEST PROFILES
+# PYSim TEST PROFILES
 # =========================================================
 
 test_profiles = {
@@ -92,7 +93,7 @@ test_profiles = {
     },
 
     "TS48V3-SAIP2-1-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V3 SAIP2.1 NoBERTLV UNIQUE",
+        "profile_name": "TS48V3-SAIP2.1 NoBERTLV UNIQUE",
         "filename": "TS48V3-SAIP2-1-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
@@ -116,43 +117,43 @@ test_profiles = {
     },
 
     "TS48V4-SAIP2-1B-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V4 SAIP2.1B NoBERTLV UNIQUE",
+        "profile_name": "TS48V4-SAIP2.1B NoBERTLV UNIQUE",
         "filename": "TS48V4-SAIP2-1B-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V4-SAIP2-3-BERTLV-UNIQUE": {
-        "profile_name": "TS48 V4 SAIP2.3 BERTLV UNIQUE",
+        "profile_name": "TS48V4-SAIP2.3 BERTLV UNIQUE",
         "filename": "TS48V4-SAIP2-3-BERTLV-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V4-SAIP2-3-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V4 SAIP2.3 NoBERTLV UNIQUE",
+        "profile_name": "TS48V4-SAIP2.3 NoBERTLV UNIQUE",
         "filename": "TS48V4-SAIP2-3-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V5-SAIP2-1A-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V5 SAIP2.1A NoBERTLV UNIQUE",
+        "profile_name": "TS48V5-SAIP2.1A NoBERTLV UNIQUE",
         "filename": "TS48V5-SAIP2-1A-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V5-SAIP2-1B-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V5 SAIP2.1B NoBERTLV UNIQUE",
+        "profile_name": "TS48V5-SAIP2.1B NoBERTLV UNIQUE",
         "filename": "TS48V5-SAIP2-1B-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V5-SAIP2-3-BERTLV-SUCI-UNIQUE": {
-        "profile_name": "TS48 V5 SAIP2.3 BERTLV SUCI UNIQUE",
+        "profile_name": "TS48V5-SAIP2.3 BERTLV SUCI UNIQUE",
         "filename": "TS48V5-SAIP2-3-BERTLV-SUCI-UNIQUE.der",
         "status": "available",
     },
 
     "TS48V5-SAIP2-3-NOBERTLV-UNIQUE": {
-        "profile_name": "TS48 V5 SAIP2.3 NoBERTLV UNIQUE",
+        "profile_name": "TS48V5-SAIP2.3 NoBERTLV UNIQUE",
         "filename": "TS48V5-SAIP2-3-NOBERTLV-UNIQUE.der",
         "status": "available",
     },
@@ -208,24 +209,6 @@ def generate_request_id():
     return "MCOE-" + secrets.token_hex(16).upper()
 
 
-def generate_activation_code(matching_id: str):
-
-    """
-    Generates a test activation-code representation.
-
-    IMPORTANT:
-    This is only a control-plane activation string.
-    It must correspond to an authorized profile/test
-    environment before an actual LPA/eUICC download
-    can succeed.
-    """
-
-    return (
-        f"1${SM_DP_PLUS_ADDRESS}$"
-        f"{matching_id}"
-    )
-
-
 def find_available_profile():
 
     for matching_id, profile in test_profiles.items():
@@ -235,6 +218,27 @@ def find_available_profile():
             return matching_id, profile
 
     return None, None
+
+
+# =========================================================
+# ACTIVATION CODE
+# =========================================================
+#
+# IMPORTANT:
+#
+# This is the GSMA activation-code container format.
+#
+# The SM-DP+ must actually recognize the matching ID.
+#
+# Do NOT substitute the .der filename here.
+#
+# =========================================================
+
+def build_activation_code(matching_id: str) -> str:
+
+    return (
+        f"1${SM_DP_PLUS_ADDRESS}${matching_id}"
+    )
 
 
 # =========================================================
@@ -255,25 +259,43 @@ async def check_smdp():
             )
 
             return {
-                "reachable": response.status_code < 500,
-                "http_status": response.status_code,
-                "endpoint": SM_DP_PLUS_URL
+
+                "reachable":
+                    response.status_code < 500,
+
+                "http_status":
+                    response.status_code,
+
+                "endpoint":
+                    SM_DP_PLUS_URL
             }
 
     except httpx.RequestError as exc:
 
         return {
-            "reachable": False,
-            "error": str(exc),
-            "endpoint": SM_DP_PLUS_URL
+
+            "reachable":
+                False,
+
+            "error":
+                str(exc),
+
+            "endpoint":
+                SM_DP_PLUS_URL
         }
 
     except Exception as exc:
 
         return {
-            "reachable": False,
-            "error": str(exc),
-            "endpoint": SM_DP_PLUS_URL
+
+            "reachable":
+                False,
+
+            "error":
+                str(exc),
+
+            "endpoint":
+                SM_DP_PLUS_URL
         }
 
 
@@ -295,7 +317,7 @@ async def root():
             "online",
 
         "version":
-            "7.0.0",
+            "8.0.0",
 
         "service":
             "MCOE Control API",
@@ -306,14 +328,11 @@ async def root():
         "smdp_plus_reachable":
             smdp["reachable"],
 
+        "smdp_plus_http_status":
+            smdp.get("http_status"),
+
         "profile_count":
-            len(test_profiles),
-
-        "eid_required_for_control_api":
-            False,
-
-        "eid_note":
-            "Android applications may not be allowed to read EID."
+            len(test_profiles)
     }
 
 
@@ -335,7 +354,7 @@ async def health():
             "MCOE eSIM Provisioning API",
 
         "version":
-            "7.0.0",
+            "8.0.0",
 
         "timestamp":
             utc_now(),
@@ -361,7 +380,7 @@ async def health():
 
 
 # =========================================================
-# SM-DP+ CONNECTION TEST
+# SM-DP+ CONFIGURATION
 # =========================================================
 
 @app.get("/api/esim/smdp")
@@ -390,10 +409,14 @@ async def smdp_configuration():
             smdp.get("http_status"),
 
         "status":
+            "reachable"
+            if smdp["reachable"]
+            else "unreachable",
+
+        "note":
             (
-                "reachable"
-                if smdp["reachable"]
-                else "unreachable"
+                "A 404 from the web root does not prove "
+                "that the ES9+ endpoint is unavailable."
             )
     }
 
@@ -451,7 +474,7 @@ def register_device(
 
             "eid_status":
                 (
-                    "available"
+                    "registered"
                     if existing["eid"]
                     else "protected_or_unavailable"
                 ),
@@ -519,6 +542,7 @@ def register_device(
         "esim_status":
             "not_provisioned"
     }
+
 
 # =========================================================
 # HEARTBEAT
@@ -605,10 +629,9 @@ def device_status(
             device["eid"],
 
         "eid_status":
-            (
-                "available"
-                if device["eid"]
-                else "protected_or_unavailable"
+            device.get(
+                "eid_status",
+                "protected_or_unavailable"
             ),
 
         "esim_status":
@@ -652,8 +675,7 @@ def update_eid(
         )
 
     device["eid"] = eid
-
-    device["eid_status"] = "available"
+    device["eid_status"] = "registered"
 
     return {
 
@@ -667,7 +689,7 @@ def update_eid(
             eid,
 
         "eid_status":
-            "available",
+            "registered",
 
         "esim_status":
             device["esim_status"]
@@ -717,7 +739,7 @@ def list_profiles():
 
 
 # =========================================================
-# PROVISION eSIM
+# PROVISION
 # =========================================================
 
 @app.post("/api/esim/provision")
@@ -727,18 +749,11 @@ def request_esim_provision(
 
     device_id = request.device_id.strip()
 
-    if not device_id:
-
-        raise HTTPException(
-            status_code=400,
-            detail="device_id is required"
-        )
-
-    # -----------------------------------------------------
-    # DEVICE
-    # -----------------------------------------------------
-
     device = devices.get(device_id)
+
+    # -----------------------------------------------------
+    # DEVICE MUST EXIST
+    # -----------------------------------------------------
 
     if not device:
 
@@ -748,18 +763,17 @@ def request_esim_provision(
         )
 
     # -----------------------------------------------------
-    # EID
+    # EID IS OPTIONAL
     # -----------------------------------------------------
     #
-    # EID IS OPTIONAL HERE.
-    #
-    # Android may expose the eUICC but protect the EID
-    # from ordinary applications.
+    # Android may expose the eUICC hardware but protect
+    # the EID from a normal application.
     #
     # Therefore:
     #
-    #   EID present     -> use it
-    #   EID unavailable -> continue with test provisioning
+    # eid == None
+    #
+    # does NOT stop activation-code provisioning.
     #
     # -----------------------------------------------------
 
@@ -767,25 +781,15 @@ def request_esim_provision(
 
     if eid:
 
-        eid_status = "available"
-
-        print(
-            f"MCOE: EID registered for {device_id}"
-        )
+        device["eid_status"] = "registered"
 
     else:
 
-        eid_status = "protected_or_unavailable"
+        device["eid_status"] = "protected_or_unavailable"
 
-        print(
-            "MCOE: Android did not expose EID; "
-            "continuing with activation-code provisioning"
-        )
-
-    device["eid_status"] = eid_status
 
     # -----------------------------------------------------
-    # EXISTING ACTIVE REQUEST
+    # EXISTING REQUEST
     # -----------------------------------------------------
 
     active_id = device.get(
@@ -815,10 +819,13 @@ def request_esim_provision(
                     device_id,
 
                 "eid":
-                    eid,
+                    device.get("eid"),
 
                 "eid_status":
-                    eid_status,
+                    device.get(
+                        "eid_status",
+                        "protected_or_unavailable"
+                    ),
 
                 "status":
                     existing["status"],
@@ -832,21 +839,22 @@ def request_esim_provision(
                 "matching_id":
                     existing["matching_id"],
 
+                "activation_code":
+                    existing["activation_code"],
+
                 "profile":
                     existing["profile_name"],
 
                 "profile_file":
                     existing["profile_file"],
 
-                "activation_code":
-                    existing["activation_code"],
-
                 "message":
                     "Existing provisioning request."
             }
 
+
     # -----------------------------------------------------
-    # FIND AVAILABLE PROFILE
+    # FIND PROFILE
     # -----------------------------------------------------
 
     matching_id, profile = find_available_profile()
@@ -856,26 +864,26 @@ def request_esim_provision(
         raise HTTPException(
             status_code=503,
             detail=(
-                "No test profile is currently available. "
-                "All configured profiles are reserved or active."
+                "No test profile is currently available."
             )
         )
 
+
     # -----------------------------------------------------
-    # GENERATE REQUEST
+    # BUILD ACTIVATION CODE
     # -----------------------------------------------------
 
-    request_id = generate_request_id()
-
-    now = utc_now()
-
-    activation_code = generate_activation_code(
+    activation_code = build_activation_code(
         matching_id
     )
+
 
     # -----------------------------------------------------
     # CREATE REQUEST
     # -----------------------------------------------------
+
+    request_id = generate_request_id()
+    now = utc_now()
 
     esim_requests[request_id] = {
 
@@ -889,7 +897,10 @@ def request_esim_provision(
             eid,
 
         "eid_status":
-            eid_status,
+            device.get(
+                "eid_status",
+                "protected_or_unavailable"
+            ),
 
         "matching_id":
             matching_id,
@@ -919,6 +930,7 @@ def request_esim_provision(
             now
     }
 
+
     # -----------------------------------------------------
     # RESERVE PROFILE
     # -----------------------------------------------------
@@ -928,6 +940,7 @@ def request_esim_provision(
     device["esim_status"] = "provisioning"
 
     device["active_request_id"] = request_id
+
 
     # -----------------------------------------------------
     # RETURN PROVISIONING INFORMATION
@@ -948,7 +961,10 @@ def request_esim_provision(
             eid,
 
         "eid_status":
-            eid_status,
+            device.get(
+                "eid_status",
+                "protected_or_unavailable"
+            ),
 
         "status":
             "pending",
@@ -962,21 +978,20 @@ def request_esim_provision(
         "matching_id":
             matching_id,
 
+        "activation_code":
+            activation_code,
+
         "profile":
             profile["profile_name"],
 
         "profile_file":
             profile["filename"],
 
-        "activation_code":
-            activation_code,
-
         "message":
             (
                 "Test profile reserved. "
-                "EID was not required by the MCOE control API. "
-                "Use the authorized LPA/eUICC test environment "
-                "to perform the RSP download."
+                "The authorized Android LPA/eUICC "
+                "will perform the RSP download."
             )
     }
 
@@ -1013,7 +1028,10 @@ def esim_request_status(
             request["eid"],
 
         "eid_status":
-            request["eid_status"],
+            request.get(
+                "eid_status",
+                "protected_or_unavailable"
+            ),
 
         "matching_id":
             request["matching_id"],
@@ -1088,6 +1106,7 @@ def complete_provisioning(
         matching_id
     )
 
+
     # -----------------------------------------------------
     # SUCCESS
     # -----------------------------------------------------
@@ -1095,11 +1114,9 @@ def complete_provisioning(
     if request.success:
 
         esim_request["status"] = "active"
-
         esim_request["updated_at"] = utc_now()
 
         device["esim_status"] = "active"
-
         device["active_request_id"] = request.request_id
 
         if profile:
@@ -1124,16 +1141,15 @@ def complete_provisioning(
                 "eSIM provisioning marked complete."
         }
 
+
     # -----------------------------------------------------
     # FAILURE
     # -----------------------------------------------------
 
     esim_request["status"] = "failed"
-
     esim_request["updated_at"] = utc_now()
 
     device["esim_status"] = "not_provisioned"
-
     device["active_request_id"] = None
 
     if profile:
@@ -1230,16 +1246,16 @@ def esim_status(
                 else None
             ),
 
-        "profile":
+        "activation_code":
             (
-                active_request["profile_name"]
+                active_request["activation_code"]
                 if active_request
                 else None
             ),
 
-        "activation_code":
+        "profile":
             (
-                active_request["activation_code"]
+                active_request["profile_name"]
                 if active_request
                 else None
             )
@@ -1287,9 +1303,7 @@ def cancel_esim_provision(
 
     if esim_request:
 
-        matching_id = esim_request[
-            "matching_id"
-        ]
+        matching_id = esim_request["matching_id"]
 
         profile = test_profiles.get(
             matching_id
@@ -1300,11 +1314,9 @@ def cancel_esim_provision(
             profile["status"] = "available"
 
         esim_request["status"] = "cancelled"
-
         esim_request["updated_at"] = utc_now()
 
     device["active_request_id"] = None
-
     device["esim_status"] = "not_provisioned"
 
     return {
@@ -1400,7 +1412,10 @@ def list_esim_requests():
                 request["eid"],
 
             "eid_status":
-                request["eid_status"],
+                request.get(
+                    "eid_status",
+                    "protected_or_unavailable"
+                ),
 
             "matching_id":
                 request["matching_id"],
@@ -1416,6 +1431,9 @@ def list_esim_requests():
 
             "smdp_url":
                 request["smdp_url"],
+
+            "activation_code":
+                request["activation_code"],
 
             "status":
                 request["status"],
@@ -1463,7 +1481,8 @@ def release_profile(
 
         if (
             request["matching_id"] == matching_id
-            and request["status"] in (
+            and request["status"]
+            in (
                 "pending",
                 "provisioning",
                 "active"
