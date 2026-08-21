@@ -403,26 +403,33 @@ async def smdp_configuration():
 # =========================================================
 
 @app.post("/api/device/register")
-def register_device(
-    request: DeviceRegisterRequest
-):
+def register_device(request: DeviceRegisterRequest):
 
     device_id = request.device_id.strip()
     device_name = request.device_name.strip()
 
     if not device_id:
-
         raise HTTPException(
             status_code=400,
             detail="device_id is required"
         )
 
     if not device_name:
-
         raise HTTPException(
             status_code=400,
             detail="device_name is required"
         )
+
+    eid = None
+
+    if request.eid:
+        candidate = request.eid.strip()
+
+        if (
+            len(candidate) == 32
+            and candidate.isdigit()
+        ):
+            eid = candidate
 
     existing = devices.get(device_id)
 
@@ -432,32 +439,22 @@ def register_device(
         existing["online"] = True
         existing["last_seen"] = utc_now()
 
+        if eid:
+            existing["eid"] = eid
+
         return {
-
-            "registered":
-                True,
-
-            "existing":
-                True,
-
-            "device_id":
-                device_id,
-
-            "device_token":
-                existing["device_token"],
-
-            "eid":
-                existing["eid"],
-
-            "eid_status":
-                (
-                    "available"
-                    if existing["eid"]
-                    else "protected_or_unavailable"
-                ),
-
-            "esim_status":
-                existing["esim_status"]
+            "registered": True,
+            "existing": True,
+            "device_id": device_id,
+            "device_token": existing["device_token"],
+            "eid": existing["eid"],
+            "esim_status": existing["esim_status"],
+            "message": (
+                "Device registered with EID"
+                if existing["eid"]
+                else
+                "Device registered; EID protected by Android"
+            )
         }
 
     token = generate_device_token()
@@ -465,61 +462,46 @@ def register_device(
 
     devices[device_id] = {
 
-        "device_id":
-            device_id,
+        "device_id": device_id,
 
-        "device_name":
-            device_name,
+        "device_name": device_name,
 
-        "device_token":
-            token,
+        "device_token": token,
 
-        "online":
-            True,
+        "online": True,
 
-        "registered_at":
-            now,
+        "registered_at": now,
 
-        "last_seen":
-            now,
+        "last_seen": now,
 
-        "eid":
-            None,
+        "eid": eid,
 
-        "eid_status":
-            "protected_or_unavailable",
+        "esim_status": "not_provisioned",
 
-        "esim_status":
-            "not_provisioned",
-
-        "active_request_id":
-            None
+        "active_request_id": None
     }
 
     return {
 
-        "registered":
-            True,
+        "registered": True,
 
-        "existing":
-            False,
+        "existing": False,
 
-        "device_id":
-            device_id,
+        "device_id": device_id,
 
-        "device_token":
-            token,
+        "device_token": token,
 
-        "eid":
-            None,
+        "eid": eid,
 
-        "eid_status":
-            "protected_or_unavailable",
+        "esim_status": "not_provisioned",
 
-        "esim_status":
-            "not_provisioned"
+        "message": (
+            "Device registered with EID"
+            if eid
+            else
+            "Device registered; EID protected by Android"
+        )
     }
-
 
 # =========================================================
 # HEARTBEAT
