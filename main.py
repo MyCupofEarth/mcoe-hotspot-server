@@ -426,10 +426,15 @@ def register_device(request: DeviceRegisterRequest):
         candidate = request.eid.strip()
 
         if (
-            len(candidate) == 32
-            and candidate.isdigit()
+            len(candidate) != 32
+            or not candidate.isdigit()
         ):
-            eid = candidate
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid EID. Expected 32 digits."
+            )
+
+        eid = candidate
 
     existing = devices.get(device_id)
 
@@ -449,57 +454,36 @@ def register_device(request: DeviceRegisterRequest):
             "device_token": existing["device_token"],
             "eid": existing["eid"],
             "esim_status": existing["esim_status"],
-            "message": (
-                "Device registered with EID"
-                if existing["eid"]
-                else
-                "Device registered; EID protected by Android"
-            )
+            "message": "Device registration updated."
         }
 
     token = generate_device_token()
     now = utc_now()
 
     devices[device_id] = {
-
         "device_id": device_id,
-
         "device_name": device_name,
-
         "device_token": token,
-
         "online": True,
-
         "registered_at": now,
-
         "last_seen": now,
-
         "eid": eid,
-
         "esim_status": "not_provisioned",
-
         "active_request_id": None
     }
 
     return {
-
         "registered": True,
-
         "existing": False,
-
         "device_id": device_id,
-
         "device_token": token,
-
         "eid": eid,
-
         "esim_status": "not_provisioned",
-
         "message": (
-            "Device registered with EID"
+            "Device registered with EID."
             if eid
             else
-            "Device registered; EID protected by Android"
+            "Device registered without EID."
         )
     }
 
