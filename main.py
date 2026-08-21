@@ -12,7 +12,7 @@ import httpx
 
 app = FastAPI(
     title="MCOE eSIM Provisioning API",
-    version="6.1.0"
+    version="6.2.0"
 )
 
 
@@ -36,38 +36,24 @@ SM_DP_PLUS_URL = f"https://{SM_DP_PLUS_ADDRESS}"
 
 
 # =========================================================
-# TEMPORARY IN-MEMORY STORAGE
+# TEMPORARY STORAGE
 # =========================================================
 #
 # IMPORTANT:
 #
-# Render can restart/redeploy the service.
-# These dictionaries are NOT permanent storage.
+# These dictionaries disappear when Render restarts the
+# service.
 #
-# For production use PostgreSQL.
+# For a permanent production system use PostgreSQL.
 #
 # =========================================================
 
 devices = {}
-
 esim_requests = {}
 
 
 # =========================================================
-# PYSim TEST PROFILES
-# =========================================================
-#
-# The Matching ID must correspond to the profile that
-# actually exists on the pySim SM-DP+.
-#
-# Expected pySim location:
-#
-# smdpp-data/upp/<filename>
-#
-# Example:
-#
-# smdpp-data/upp/TS48V1-A-UNIQUE.der
-#
+# TEST PROFILES
 # =========================================================
 
 test_profiles = {
@@ -228,10 +214,7 @@ def generate_device_token():
 
 
 def generate_request_id():
-    return (
-        "MCOE-"
-        + secrets.token_hex(16).upper()
-    )
+    return "MCOE-" + secrets.token_hex(16).upper()
 
 
 def find_available_profile():
@@ -239,14 +222,13 @@ def find_available_profile():
     for matching_id, profile in test_profiles.items():
 
         if profile["status"] == "available":
-
             return matching_id, profile
 
     return None, None
 
 
 # =========================================================
-# CHECK SM-DP+
+# SM-DP+ CHECK
 # =========================================================
 
 async def check_smdp():
@@ -272,6 +254,7 @@ async def check_smdp():
 
         return {
             "reachable": False,
+            "http_status": None,
             "error": str(exc),
             "endpoint": SM_DP_PLUS_URL
         }
@@ -280,6 +263,7 @@ async def check_smdp():
 
         return {
             "reachable": False,
+            "http_status": None,
             "error": str(exc),
             "endpoint": SM_DP_PLUS_URL
         }
@@ -303,7 +287,7 @@ async def root():
             "online",
 
         "version":
-            "6.1.0",
+            "6.2.0",
 
         "service":
             "MCOE Control API",
@@ -337,7 +321,7 @@ async def health():
             "MCOE eSIM Provisioning API",
 
         "version":
-            "6.1.0",
+            "6.2.0",
 
         "timestamp":
             utc_now(),
@@ -363,7 +347,7 @@ async def health():
 
 
 # =========================================================
-# SM-DP+ CONNECTION TEST
+# SM-DP+ CONFIGURATION
 # =========================================================
 
 @app.get("/api/esim/smdp")
@@ -447,10 +431,16 @@ def register_device(
                 existing["device_token"],
 
             "eid":
-                existing["eid"],
+                existing.get("eid"),
+
+            "eid_available":
+                existing.get("eid") is not None,
 
             "esim_status":
-                existing["esim_status"]
+                existing["esim_status"],
+
+            "message":
+                "Device already registered."
         }
 
     token = generate_device_token()
@@ -479,6 +469,9 @@ def register_device(
         "eid":
             None,
 
+        "eid_source":
+            "not_available",
+
         "esim_status":
             "not_provisioned",
 
@@ -503,8 +496,17 @@ def register_device(
         "eid":
             None,
 
+        "eid_available":
+            False,
+
         "esim_status":
-            "not_provisioned"
+            "not_provisioned",
+
+        "message":
+            (
+                "Device registered. "
+                "EID is optional for this test provisioning flow."
+            )
     }
 
 
@@ -528,7 +530,10 @@ def heartbeat(
             detail="Device not registered"
         )
 
-    if device["device_token"] != request.device_token:
+    if (
+        device["device_token"]
+        != request.device_token
+    ):
 
         raise HTTPException(
             status_code=401,
@@ -590,7 +595,16 @@ def device_status(
             device["last_seen"],
 
         "eid":
-            device["eid"],
+            device.get("eid"),
+
+        "eid_available":
+            device.get("eid") is not None,
+
+        "eid_source":
+            device.get(
+                "eid_source",
+                "unknown"
+            ),
 
         "esim_status":
             device["esim_status"],
@@ -602,6 +616,14 @@ def device_status(
 
 # =========================================================
 # UPDATE EID
+# =========================================================
+#
+# OPTIONAL.
+#
+# Android may not expose EID to a normal application.
+# This endpoint remains available for authorized test
+# environments where the EID can be supplied.
+#
 # =========================================================
 
 @app.post("/api/device/eid")
@@ -633,6 +655,7 @@ def update_eid(
         )
 
     device["eid"] = eid
+    device["eid_source"] = "supplied"
 
     return {
 
@@ -644,6 +667,12 @@ def update_eid(
 
         "eid":
             eid,
+
+        "eid_available":
+            True,
+
+        "eid_source":
+            device["eid_source"],
 
         "esim_status":
             device["esim_status"]
@@ -693,7 +722,19 @@ def list_profiles():
 
 
 # =========================================================
-# PROVISION
+# PROVISION eSIM
+# =========================================================
+#
+# IMPORTANT CHANGE:
+#
+# EID IS NO LONGER REQUIRED.
+#
+# Android has reported that it cannot expose the EID to
+# this application. Therefore the device_id is used to
+# identify the provisioning request.
+#
+# The EID is retained when available, but None is valid.
+#
 # =========================================================
 
 @app.post("/api/esim/provision")
@@ -703,35 +744,37 @@ def request_esim_provision(
 
     device_id = request.device_id.strip()
 
-    device = devices.get(device_id)
-
     # -----------------------------------------------------
     # DEVICE MUST EXIST
     # -----------------------------------------------------
+
+    device = devices.get(device_id)
 
     if not device:
 
         raise HTTPException(
             status_code=404,
-            detail="Device not registered"
+            detail="Device is not registered"
         )
 
     # -----------------------------------------------------
-    # EID REQUIRED
+    # EID IS OPTIONAL
     # -----------------------------------------------------
 
-    if not device:
-    raise HTTPException(
-        status_code=404,
-        detail="Device is not registered"
-    )
+    eid = device.get("eid")
 
-eid = device.get("eid")
+    if eid:
 
-if eid:
-    print(f"EID registered: {eid}")
-else:
-    print("EID unavailable to Android app; continuing with activation-code provisioning")
+        print(
+            f"[MCOE] EID registered for {device_id}: {eid}"
+        )
+
+    else:
+
+        print(
+            "[MCOE] EID unavailable to Android app. "
+            "Continuing with device-based test provisioning."
+        )
 
     # -----------------------------------------------------
     # RETURN EXISTING ACTIVE REQUEST
@@ -764,7 +807,10 @@ else:
                     device_id,
 
                 "eid":
-                    device["eid"],
+                    existing.get("eid"),
+
+                "eid_available":
+                    existing.get("eid") is not None,
 
                 "status":
                     existing["status"],
@@ -781,20 +827,12 @@ else:
                 "profile":
                     existing["profile_name"],
 
+                "profile_file":
+                    existing["profile_file"],
+
                 "message":
                     "Existing provisioning request."
             }
-
-    # -----------------------------------------------------
-    # CHECK SM-DP+
-    # -----------------------------------------------------
-
-    # Do not attempt to create a provisioning request when
-    # the configured SM-DP+ service cannot be reached.
-
-    # This check is intentionally not mandatory because
-    # Render/pySim may be waking from sleep. The profile
-    # reservation can still be created and the LPA can retry.
 
     # -----------------------------------------------------
     # FIND AVAILABLE PROFILE
@@ -828,7 +866,10 @@ else:
             device_id,
 
         "eid":
-            device["eid"],
+            eid,
+
+        "eid_available":
+            eid is not None,
 
         "matching_id":
             matching_id,
@@ -881,7 +922,10 @@ else:
             device_id,
 
         "eid":
-            device["eid"],
+            eid,
+
+        "eid_available":
+            eid is not None,
 
         "status":
             "pending",
@@ -904,9 +948,10 @@ else:
         "message":
             (
                 "Test profile reserved. "
-                "The authorized LPA/eUICC must perform "
-                "the RSP download using the configured "
-                "SM-DP+ and Matching ID."
+                "EID was not required by the MCOE control API. "
+                "The authorized LPA/eUICC must perform the "
+                "actual RSP download through the configured "
+                "SM-DP+."
             )
     }
 
@@ -940,7 +985,13 @@ def esim_request_status(
             request["device_id"],
 
         "eid":
-            request["eid"],
+            request.get("eid"),
+
+        "eid_available":
+            request.get(
+                "eid_available",
+                request.get("eid") is not None
+            ),
 
         "matching_id":
             request["matching_id"],
@@ -999,14 +1050,19 @@ def complete_provisioning(
             detail="eSIM request not found"
         )
 
-    if esim_request["device_id"] != request.device_id:
+    if (
+        esim_request["device_id"]
+        != request.device_id
+    ):
 
         raise HTTPException(
             status_code=403,
             detail="Request does not belong to device"
         )
 
-    matching_id = esim_request["matching_id"]
+    matching_id = esim_request[
+        "matching_id"
+    ]
 
     profile = test_profiles.get(
         matching_id
@@ -1019,15 +1075,12 @@ def complete_provisioning(
     if request.success:
 
         esim_request["status"] = "active"
-
         esim_request["updated_at"] = utc_now()
 
         device["esim_status"] = "active"
-
         device["active_request_id"] = request.request_id
 
         if profile:
-
             profile["status"] = "active"
 
         return {
@@ -1053,15 +1106,12 @@ def complete_provisioning(
     # -----------------------------------------------------
 
     esim_request["status"] = "failed"
-
     esim_request["updated_at"] = utc_now()
 
     device["esim_status"] = "not_provisioned"
-
     device["active_request_id"] = None
 
     if profile:
-
         profile["status"] = "available"
 
     return {
@@ -1124,7 +1174,10 @@ def esim_status(
             device_id,
 
         "eid":
-            device["eid"],
+            device.get("eid"),
+
+        "eid_available":
+            device.get("eid") is not None,
 
         "status":
             device["esim_status"],
@@ -1151,6 +1204,13 @@ def esim_status(
         "profile":
             (
                 active_request["profile_name"]
+                if active_request
+                else None
+            ),
+
+        "request_status":
+            (
+                active_request["status"]
                 if active_request
                 else None
             )
@@ -1211,11 +1271,9 @@ def cancel_esim_provision(
             profile["status"] = "available"
 
         esim_request["status"] = "cancelled"
-
         esim_request["updated_at"] = utc_now()
 
     device["active_request_id"] = None
-
     device["esim_status"] = "not_provisioned"
 
     return {
@@ -1263,7 +1321,16 @@ def list_devices():
                 device["last_seen"],
 
             "eid":
-                device["eid"],
+                device.get("eid"),
+
+            "eid_available":
+                device.get("eid") is not None,
+
+            "eid_source":
+                device.get(
+                    "eid_source",
+                    "unknown"
+                ),
 
             "esim_status":
                 device["esim_status"],
@@ -1302,7 +1369,13 @@ def list_esim_requests():
                 request["device_id"],
 
             "eid":
-                request["eid"],
+                request.get("eid"),
+
+            "eid_available":
+                request.get(
+                    "eid_available",
+                    request.get("eid") is not None
+                ),
 
             "matching_id":
                 request["matching_id"],
@@ -1362,15 +1435,14 @@ def release_profile(
         )
 
     # -----------------------------------------------------
-    # Do not release an active profile
+    # DO NOT RELEASE ACTIVE PROFILE
     # -----------------------------------------------------
 
     for request in esim_requests.values():
 
         if (
             request["matching_id"] == matching_id
-            and request["status"]
-            in (
+            and request["status"] in (
                 "pending",
                 "provisioning",
                 "active"
